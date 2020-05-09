@@ -1,0 +1,64 @@
+plugins {
+    id 'org.jetbrains.intellij' version '0.4.17'
+    id "org.jetbrains.grammarkit" version "2020.1.2"
+}
+
+apply plugin: 'org.jetbrains.grammarkit'
+
+import org.jetbrains.grammarkit.tasks.*
+
+task generateLexer(type: GenerateLexer) {
+    // source flex file
+    source = "src/main/java/com/geowang/language/grammer/_MinispecLexer.flex"
+
+    // target directory for lexer
+    targetDir = "src/main/gen/com/geowang/language/grammer/"
+
+    // target classname, target file will be targetDir/targetClass.java
+    targetClass = "_MinispecLexer"
+
+    // if set, plugin will remove a lexer output file before generating new one. Default: false
+    purgeOldFiles = true
+}
+
+task generateParser(type: GenerateParser) {
+    // source bnf file
+    source = "src/main/java/com/geowang/language/grammer/Minispec.bnf"
+
+    // optional, task-specific root for the generated files. Default: none
+    targetRoot = 'src/main/gen'
+
+    // path to a parser file, relative to the targetRoot
+    pathToParser = 'com/geowang/language/parser/MinispecParser.java'
+
+    // path to a directory with generated psi files, relative to the targetRoot
+    pathToPsiRoot = 'com/geowang/language/psi'
+
+    // if set, plugin will remove a parser output file and psi output directory before generating new ones. Default: false
+    purgeOldFiles = true
+}
+
+group 'com.geowang'
+version '0.0.1'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir "src/main/gen"
+        }
+    }
+}
+
+dependencies {
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
+
+intellij {
+    version '2019.3.3'
+}

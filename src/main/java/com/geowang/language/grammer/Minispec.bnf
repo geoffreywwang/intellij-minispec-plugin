@@ -1,0 +1,389 @@
+{
+    parserClass="com.geowang.language.parser.MinispecParser"
+    extends="com.intellij.extapi.psi.ASTWrapperPsiElement"
+
+    psiClassPrefix="Minispec"
+    psiImplClassSuffix="Impl"
+    psiPackage="com.geowang.language.psi"
+    psiImplPackage="com.geowang.language.psi.impl"
+
+    elementTypeHolderClass="com.geowang.language.psi.MinispecTypes"
+    elementTypeClass="com.geowang.language.psi.MinispecElementType"
+    tokenTypeClass="com.geowang.language.psi.MinispecTokenType"
+
+    psiImplUtilClass="com.geowang.language.psi.impl.MinispecPsiImplUtil"
+
+    tokens = [
+        // =-=-=-=-=-=-=-= Below are some tokens used in the Minispec language =-=-=-=-=-=-=-=
+        // ===== Symbols =====
+        EQ    = "="
+        COMMA = ","
+        DOT   = "."
+        COLON = ":"
+        SEMI  = ";"
+        QMARK = "?"
+        HASH  = "#"
+
+        // ===== Brackets =====
+        RP = ")"
+        LP = "("
+        RB = "]"
+        LB = "["
+        RC = "}"
+        LC = "{"
+
+        // ===== Logic =====
+        NOT      = "!"
+        INVERT   = "~"
+        BIT_AND  = "&"
+        BIT_NAND = "~&"
+        BIT_OR   = "|"
+        BIT_NOR  = "~|"
+        XOR      = "^"
+        XNOR     = 'regexp:~\^|\^~'
+
+        // ===== Operations =====
+        EXPO = "**"
+        MUL = "*"
+        DIV = "/"
+        MOD = "%"
+        ADD = "+"
+        SUB = "-"
+        LS  = "<<"
+        RS  = ">>"
+
+        // ===== Relational =====
+        LT       = "<"
+        LEQ      = "<="
+        GT       = ">"
+        GEQ      = ">="
+        BOOL_EQ  = "=="
+        BOOL_NEQ = "!="
+        BOOL_AND = "&&"
+        BOOL_OR  = "||"
+
+        // ===== Keywords =====
+        BEGIN        = "begin"
+        BSV_IMPORT   = "bsvimport"
+        CASE         = "case"
+        DEFAULT      = "default"
+        ELSE         = "else"
+        END          = "end"
+        END_CASE     = "endcase"
+        END_FUNCTION = "endfunction"
+        END_METHOD   = "endmethod"
+        END_MODULE   = "endmodule"
+        END_RULE     = "endrule"
+        ENUM         = "enum"
+        FOR          = "for"
+        FUNCTION     = "function"
+        IF           = "if"
+        IMPORT       = "import"
+        INPUT        = "input"
+        LET          = "let"
+        METHOD       = "method"
+        MODULE       = "module"
+        RETURN       = "return"
+        RULE         = "rule"
+        STRUCT       = "struct"
+        TYPE_KEYWORD = "type"
+        TYPEDEF      = "typedef"
+
+        // ===== Identifiers =====
+        UPPER_CASE_IDENTIFIER = 'regexp:[A-Z][a-zA-Z0-9_]*'
+        LOWER_CASE_IDENTIFIER = 'regexp:[a-z_][a-zA-Z0-9_]*'
+        DOLLAR_IDENTIFIER     = 'regexp:[$][a-z][a-zA-Z0-9_$]*'
+
+        // ===== Literals =====
+        INT_LITERAL    = "regexp:([1-9][0-9]*)?(('h[0-9a-fA-F_]+)|('d[0-9_]+)|('b[0-1_]+))|([0-9_]+)"
+        STRING_LITERAL = 'regexp:"([^\f\n\r\t"])*"'
+
+        // ===== Comments =====
+        ONE_LINE_COMMENT = 'regexp://.*'
+        INLINE_COMMENT   = 'regexp:/\*(.|\s)*?\*/'
+
+        // ===== Whitespace =====
+        WHITE_SPACE = 'regexp:[ \f\n\r\t]'
+    ]
+
+    // ===== Extension =====
+    // This is what allows for left recursion
+    extends(".*Expr")    = Expression
+    extends(".*Primary") = PrimaryExpr
+    extends(".*Binop")   = BinopExpr
+    extends(".*LValue")  = LValue
+}
+
+// ===========================================
+//             General Code Blocks
+// ===========================================
+
+// File as a whole (consists of any number of PackageStmts)
+PackageDef ::= PackageStmt * // {pin=PackageStmt recoverWhile=Recover_PackageDef}
+private Recover_PackageDef ::= !PackageStmt;
+PackageStmt ::=
+      ImportDecl
+    | BsvImportDecl
+    | TypeDecl
+    | VarDecl
+    | FunctionDef
+    | ModuleDef
+
+// ===== Imports =====
+ImportDecl ::= IMPORT ImportFilename (COMMA ImportFilename)* SEMI {pin=1}
+ImportFilename ::= LOWER_CASE_IDENTIFIER | UPPER_CASE_IDENTIFIER
+
+// ===== BSV Imports =====
+BsvImportDecl ::= BSV_IMPORT BsvFilename (COMMA BsvFilename)* SEMI {pin=1}
+BsvFilename ::= UPPER_CASE_IDENTIFIER
+
+// ===== Declaring Types =====
+TypeDecl ::=
+      TypeDefSynonym
+    | TypeDefEnum
+    | TypeDefStruct
+
+TypeDefSynonym ::= TYPEDEF Type TypeName ParamFormals? SEMI {pin=2}
+TypeName ::= UPPER_CASE_IDENTIFIER
+
+TypeDefEnum ::= TYPEDEF ENUM LC EnumElement (COMMA EnumElement)* RC EnumName SEMI {pin=2}
+EnumElement ::= EnumLabelName (EQ EnumLabelVal)?
+EnumLabelName ::= UPPER_CASE_IDENTIFIER
+EnumLabelVal ::= INT_LITERAL
+EnumName ::= UPPER_CASE_IDENTIFIER
+
+TypeDefStruct ::= TYPEDEF STRUCT LC (StructElement)* RC TypeName ParamFormals? SEMI {pin=2}
+StructElement ::= Type StructMemberName SEMI
+StructMemberName ::= LOWER_CASE_IDENTIFIER
+
+// ===== Declaring Variables =====
+VarDecl ::=
+      VarSimpleDecl
+    | VarLetDecl
+
+VarSimpleDecl ::= Type VarElement (COMMA VarElement)* SEMI { pin=1 methods=[getVariables] }
+VarLetDecl ::= LET (VarName | (LC VarName (COMMA VarName)* RC)) (EQ Expression)? SEMI { pin=1 methods=[getVariables] }
+
+VarElement ::= VarName (EQ Expression)?
+VarName ::= LOWER_CASE_IDENTIFIER
+
+// ===== Modules =====
+ModuleDef ::= MODULE ModuleName ParamFormals? ArgFormals? SEMI ModuleStmt* END_MODULE
+ModuleName ::= UPPER_CASE_IDENTIFIER
+
+ModuleStmt ::=
+      SubmoduleDecl
+    | InputDef
+    | MethodDef
+    | RuleDef
+    | Stmt
+
+// ===== Submodules =====
+SubmoduleDecl ::= Type SubmoduleName Args? SEMI
+SubmoduleName ::= LOWER_CASE_IDENTIFIER
+
+// ===== Inputs =====
+InputDef ::= INPUT Type InputName (DEFAULT EQ InputDefaultVal)? SEMI
+InputName ::= LOWER_CASE_IDENTIFIER
+InputDefaultVal ::= Expression
+
+// ===== Methods =====
+MethodDef ::= METHOD Type MethodName ArgFormals ? (SEMI Stmt* END_METHOD | EQ Expression SEMI)
+MethodName ::= LOWER_CASE_IDENTIFIER
+
+// ===== Rules =====
+RuleDef ::= RULE RuleName SEMI Stmt* END_RULE
+RuleName ::= LOWER_CASE_IDENTIFIER
+
+// ===== Function =====
+FunctionDef ::= FUNCTION Type FunctionName ParamFormals? ArgFormals? (FunctionBlockDef | FunctionSimpleDef)
+private FunctionBlockDef ::= SEMI Stmt* END_FUNCTION
+private FunctionSimpleDef ::= EQ Expression SEMI
+
+FunctionName ::= LOWER_CASE_IDENTIFIER
+
+// ===== Variable Assignment =====
+VarAssign ::=
+      LValue EQ Expression SEMI
+    | LC LValue (COMMA LValue)* RC EQ Expression SEMI
+
+LValue ::=
+      SimpleLValue
+    | MemberLValue
+    | IndexLValue
+    | SliceLValue
+
+SimpleLValue ::= LOWER_CASE_IDENTIFIER
+MemberLValue ::= LValue DOT LOWER_CASE_IDENTIFIER
+IndexLValue ::= LValue LB Expression RB
+SliceLValue ::= LValue LB Expression COLON Expression RB
+
+// ===========================================
+//                 Expressions
+// ===========================================
+Expression ::=
+      CondExpr
+    | CaseExpr
+    | MetaBinopExpr
+
+// ===== Different types of expressions =====
+// --- Conditional Expressions ---
+CondExpr ::= Expression QMARK Expression COLON Expression { rightAssociative=true }
+
+// --- Case Expressions ---
+CaseExpr ::= CASE LP Expression RP CaseExprItem* END_CASE
+CaseExprItem ::= (DEFAULT | (PrimaryExpr (COMMA PrimaryExpr)*)) COLON CaseExprItemBody SEMI {pin=2}
+CaseExprItemBody ::= Expression
+
+// --- Binary Operator Expressions ---
+MetaBinopExpr ::= BinopExpr
+BinopExpr ::=
+      ExponentiationBinop
+    | MulGroupBinop
+    | AddGroupBinop
+    | ShiftGroupBinop
+    | RelationGroupBinop
+    | EqualityGroupBinop
+    | AndLogicalBinop
+    | XorLogicalBinop
+    | XnorLogicalBinop
+    | OrLogicalBinop
+    | AndBooleanBinop
+    | OrBooleanBinop
+    | UnopBinop
+
+private MulGroupBinop ::= MultiplicationBinop | DivisionBinop | ModulusBinop
+private AddGroupBinop ::= AdditionBinop | SubtractionBinop
+private ShiftGroupBinop ::= LeftShiftBinop | RightShiftBinop
+private RelationGroupBinop ::= LTRelationBinop | LEQRelationBinop | GTRelationBinop | GEQRelationBinop
+private EqualityGroupBinop ::= EQEqualityBinop | NEQEqualityBinop
+
+ExponentiationBinop ::= BinopExpr EXPO BinopExpr
+
+MultiplicationBinop ::= BinopExpr MUL BinopExpr
+DivisionBinop ::= BinopExpr DIV BinopExpr
+ModulusBinop ::= BinopExpr MOD BinopExpr
+
+AdditionBinop ::= BinopExpr ADD BinopExpr
+SubtractionBinop ::= BinopExpr SUB BinopExpr
+
+LeftShiftBinop ::= BinopExpr LS BinopExpr
+RightShiftBinop ::= BinopExpr RS BinopExpr
+
+LTRelationBinop ::= BinopExpr LT BinopExpr
+LEQRelationBinop ::= BinopExpr LEQ BinopExpr
+GTRelationBinop ::= BinopExpr GT BinopExpr
+GEQRelationBinop ::= BinopExpr GEQ BinopExpr
+
+EQEqualityBinop ::= BinopExpr BOOL_EQ BinopExpr
+NEQEqualityBinop ::= BinopExpr BOOL_NEQ BinopExpr
+
+AndLogicalBinop ::= BinopExpr BIT_AND BinopExpr
+XorLogicalBinop ::= BinopExpr XOR BinopExpr
+XnorLogicalBinop ::= BinopExpr XNOR BinopExpr
+OrLogicalBinop ::= BinopExpr BIT_OR BinopExpr
+
+AndBooleanBinop ::= BinopExpr BOOL_AND BinopExpr
+OrBooleanBinop ::= BinopExpr BOOL_OR BinopExpr
+
+// --- Unary Operator Expressions ---
+UnopBinop ::=
+      UnopExpressionOpBit PrimaryExpr
+    | UnopExpressionOpMath PrimaryExpr
+    | PrimaryExpr
+UnopExpressionOpBit ::= (NOT | INVERT | BIT_AND | BIT_NAND | BIT_OR | BIT_NOR | XOR | XNOR)
+UnopExpressionOpMath ::= (ADD | SUB)
+
+// --- Primary Expressions ---
+PrimaryExpr ::=
+      FieldPrimary
+    | SlicePrimary
+    | CallPrimary
+    | OtherPrimary
+
+FieldPrimary ::= PrimaryExpr DOT PrimaryExpr
+SlicePrimary ::= PrimaryExpr LB (Expression (COLON Expression)?) RB
+CallPrimary ::=  PrimaryExpr LP (Expression (COMMA Expression)*)? RP
+
+OtherPrimary ::=
+      ParenthesesPrimary
+    | ReturnPrimary
+    | StructPrimary
+    | VarPrimary
+    | LiteralPrimary
+    | BitConcatPrimary
+    | BlockPrimary
+
+ParenthesesPrimary ::= LP Expression RP
+ReturnPrimary ::= RETURN Expression
+VarPrimary ::= VarLiteralPrimary Params?
+BitConcatPrimary ::= LC Expression (COMMA Expression)* RC
+StructPrimary ::= Type LC MemberBinds RC
+BlockPrimary ::= BeginEndBlock
+
+LiteralPrimary ::= INT_LITERAL | STRING_LITERAL | QMARK
+private VarLiteralPrimary ::= LOWER_CASE_IDENTIFIER | UPPER_CASE_IDENTIFIER | DOLLAR_IDENTIFIER
+
+// ===========================================
+//              Basic Statements
+// ===========================================
+
+Stmt ::=
+      VarDecl
+    | VarAssign
+    | RegWrite
+    | BeginEndBlock
+    | IfStmt
+    | CaseStmt
+    | ForStmt
+    | ExpressionStmt
+
+// --- Expression ---
+ExpressionStmt ::= Expression SEMI {pin=1}
+
+// --- Membership ---
+MemberBinds ::= MemberBind (COMMA MemberBinds)*
+MemberBind ::= StructMemberName COLON Expression
+
+// --- Blocking ---
+BeginEndBlock ::= BEGIN Stmt* END
+
+// --- Register Writing ---
+RegWrite ::= RegName LEQ Expression SEMI {pin=2}
+RegName ::= LValue
+
+// --- If/Else Statements ---
+IfStmt ::= IF LP Expression RP Stmt (ELSE Stmt)?
+
+// --- Case Statements ---
+CaseStmt ::= CASE LP Expression RP CaseStmtElement* CaseStmtDefaultElement? END_CASE
+CaseStmtElement ::= Expression (COMMA Expression)* COLON Stmt
+CaseStmtDefaultElement ::= DEFAULT COLON Stmt
+
+// --- For Loops ---
+ForStmt ::= FOR LP Type VarName EQ Expression SEMI Expression SEMI VarName EQ Expression RP Stmt
+
+// ---  Arguments ---
+ArgFormals ::= LP (ArgFormal (COMMA ArgFormal)*)? RP {methods=[getVariables]}
+ArgFormal ::= Type ArgName
+ArgName ::= LOWER_CASE_IDENTIFIER
+
+Args ::= LP (Arg (COMMA Arg)*)? RP
+Arg ::= Expression
+
+// --- Parameters ---
+ParamFormals ::= HASH LP (ParamFormal (COMMA ParamFormal)*)? RP
+ParamFormal ::=
+      Type ParamName
+    | TYPE_KEYWORD ParamTypeName
+    | Param
+
+ParamName ::= LOWER_CASE_IDENTIFIER
+ParamTypeName ::= UPPER_CASE_IDENTIFIER
+
+Params ::= HASH LP (Param (COMMA Param)*)? RP
+Param ::= Type | Expression
+
+// --- Type ---
+Type ::= TypeName Params?
+

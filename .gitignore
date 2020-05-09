@@ -1,0 +1,6 @@
+.idea
+build
+.gradle
+Minispec.g4
+jflex-1.7.0-2.jar
+idea-flex.skeleton

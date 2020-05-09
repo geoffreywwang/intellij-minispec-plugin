@@ -1,0 +1,26 @@
+<idea-plugin>
+    <id>com.geowang.minispec-plugin</id>
+    <name>Minispec</name>
+    <vendor email="geowang@mit.edu" url="geowang.com">geowang</vendor>
+
+    <description>A plugin for the minispec hardware description language used for MIT's 6.004.</description>
+
+    <!-- please see http://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
+         on how to target different products -->
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <fileType name="Minispec file" implementationClass="com.geowang.language.MinispecFileType"
+                fieldName="INSTANCE" language="Minispec" extensions="ms"/>
+        <lang.parserDefinition language="Minispec"
+                implementationClass="com.geowang.language.MinispecParserDefinition"/>
+        <lang.syntaxHighlighterFactory language="Minispec"
+                implementationClass="com.geowang.language.MinispecSyntaxHighlighterFactory"/>
+        <colorSettingsPage implementation="com.geowang.language.MinispecColorSettingsPage"/>
+        <lang.commenter language="Minispec" implementationClass="com.geowang.language.MinispecCommenter"/>
+    </extensions>
+
+    <actions>
+        <!-- Add your actions here -->
+    </actions>
+</idea-plugin>
